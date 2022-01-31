@@ -1,0 +1,2 @@
+
+echo abdul -> abdul.txt
