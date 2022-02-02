@@ -11,7 +11,13 @@ import java.nio.file.InvalidPathException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.Dictionary;
+import java.util.Hashtable;
 import java.util.Scanner;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -24,7 +30,7 @@ import org.omg.SendingContext.RunTime;
 
 public class Terminal {
     
-    private static User USER;
+    private User USER;
 
     public Terminal() {
         System.out.println("Program starting...");
@@ -42,11 +48,15 @@ public class Terminal {
     }
 
     public void run() {
-        try {
-            controlUserFlow();
-        } catch (IOException e) {
-            e.printStackTrace();
-        } 
+        Runnable run = () -> {
+            try {
+                controlUserFlow();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        };
+
+        createThread(run, false);
     }
 
     private void controlUserFlow() throws IOException {
@@ -56,13 +66,17 @@ public class Terminal {
         
         System.out.print(USER.getUserNameWithHost() + " ");
         while((input = scanner.nextLine()) != null) {
-            System.out.println("User inputted: " + input);
+           // System.out.println("User inputted: " + input);
 
             if(input.equalsIgnoreCase("exit")) {
                 break;
+            } else if (!input.isEmpty()) {
+                String[] command = input.split(" ");
+                if(command.length <= 5)
+                    decipherCommand(input);
+                else
+                    System.out.println("Uknown command.");
             }
-
-            decipherCommand(input);
 
             System.out.print(USER.getUserNameWithHost() + " ");
         }
@@ -74,68 +88,93 @@ public class Terminal {
 
     private void decipherCommand(String input) { 
 
-        Function<String, ?> functionExecutable = null;
-        Function<String, ?> func;
-        String dataToWrite = "";
-        String[] command = input.split(" ");
+        COMMAND_LOW_LEVEL lowLevel = checkLowLevelPredicate(input);
+        COMMAND_HIGH_LEVEL highLevel = checkHighLevelPredicate(input);
+        Boolean runInBg = input.contains("&");
 
-        HighLevelPredicate<String> predicate = new HighLevelPredicate<>();
-        if(predicate.test(input)) {
-            
+        // if string is echo "Hello world!" ->> file.txt &
+        input = input.replace(lowLevel.value, ""); // removes echo or datetime
+        input = input.replace(highLevel.value, ""); // removes ->> or ->
+        input = input.replace("&", ""); // removes &
+        // left with "Hello world!" file.txt
+
+        String cleanedInput = input;
+        String[] command = cleanedInput.split(" ");
+
+        //String output = getOutPutString(lowLevel, cleanedInput);
+        Function<String, String> func;
+
+        if(highLevel == COMMAND_HIGH_LEVEL.APPEND || highLevel == COMMAND_HIGH_LEVEL.OVERWRITE) {
             String fileName = command[command.length-1];
             func = (content) -> {
-                 return writeToFile(fileName, content, predicate.testForAppendingToFile(input)); 
+                return writeToFile(fileName, content, highLevel == COMMAND_HIGH_LEVEL.APPEND); 
             };
-  
         } else {
             func = (content) -> {
-                System.out.print(content);
-                return "";
+                return content;
             };
         }
 
-        if(checkIfValidPath(command[0])) {
-            functionExecutable = (path) -> {
-                String results = "";
-                try {
-                    results = runExec(path);
-                } catch (IOException e) {
-                    results = convertStrackTraceToString(e);
-                }
-                
-                return results;
-            };
-        } 
+        Runnable run = () -> {
+            String dataToWrite =  getOutPutString(lowLevel, cleanedInput);   
 
-        if(functionExecutable != null) {
-            dataToWrite = (String) functionExecutable.apply(command[0]);
-        } else {
-            dataToWrite = getOutputString(input);
-        }
+            String consoleOutput = (String) func.apply(dataToWrite);
 
-        String consoleOutput = (String) func.apply(dataToWrite);
+            if(!runInBg)
+                System.out.println(consoleOutput);
+        };
 
-        System.out.println(consoleOutput);
+       createThread(run, runInBg);
+
     }
 
-    private String getOutputString(String input) {
-        String text="";
+    private String getOutPutString(COMMAND_LOW_LEVEL cmd, String cleanedInput) {
+        String text = "";
 
-        COMMAND_LOW_LEVEL value = checkLowLevelPredicate(input);
-
-        if(value == COMMAND_LOW_LEVEL.ECHO) {
+        if(cmd == COMMAND_LOW_LEVEL.ECHO) {
             Pattern p = Pattern.compile("\"([^\"]*)\"");
-            Matcher m = p.matcher(input);
+            Matcher m = p.matcher(cleanedInput);
             while (m.find()) {
                 text += m.group(1);
             }
-        } else if(value == COMMAND_LOW_LEVEL.DATETIME) {
+        } else if(cmd == COMMAND_LOW_LEVEL.DATETIME) {
             text = new Date().toString();
-        } else {
-            text = COMMAND_LOW_LEVEL.EXECUTABLE.value;
-        }
+        } else if(cmd == COMMAND_LOW_LEVEL.EXECUTABLE){
+            //System.out.println("PATH: " + cleanedInput);
+
+            /***
+             * insert loop for external commands here
+             * if theres no hit for checking the external commands in a Hashmap<String, String>
+             * then go on to this if statement
+             * we then supply the path to the if statement and the runExec method
+             * getExternal commands will have implementation line 268
+            */
+
+            if(checkIfValidPath(cleanedInput)) {
+                try {
+                    text = runExec(cleanedInput);
+                } catch (IOException e) {
+                    text = convertStrackTraceToString(e);
+                }
+            } else {
+                text = "Supplied path was not valid.";
+            }
+        } 
 
         return text;
+    }
+
+    private void createThread(Runnable run, Boolean runInBg) {
+        Task task = new Task(run, runInBg);
+
+        if(!runInBg) {
+            try {
+                task.thread.join();
+            } catch (InterruptedException e) {
+                
+                e.printStackTrace();
+            }
+        }
     }
 
     private COMMAND_LOW_LEVEL checkLowLevelPredicate(String input) {
@@ -151,8 +190,20 @@ public class Terminal {
         } else {
             return COMMAND_LOW_LEVEL.EXECUTABLE;
         }
+    }
 
+    private COMMAND_HIGH_LEVEL checkHighLevelPredicate(String input) {
+        HighLevelPredicate<String> predicate = new HighLevelPredicate<>();
+        if(predicate.test(input)) {
+            if(predicate.testForAppendingToFile(input)) {
+                return COMMAND_HIGH_LEVEL.APPEND;
+            } else {
+                return COMMAND_HIGH_LEVEL.OVERWRITE;
+            }
         
+        } else {
+            return COMMAND_HIGH_LEVEL.CONSOLE;
+        }
     }
 
     private String writeToFile(String nameOfFile, String content, Boolean appendToFile) {
@@ -214,16 +265,28 @@ public class Terminal {
         return new User(userName, hostName, paths);
     }
 
+    private Dictionary<String, String> getExternalCommands() {
+        /**
+         * What im thinking is that for the paths in the User variable
+         * check each path for executables or .bat files
+         * and then when executing online 45 we check if the hashtable has any commands that are like the what the user 
+         * typed and we execute it if not we know its some external thing
+         * Im thinking dictionary should be Eexectubale => path 
+         */
+        return new Hashtable<>();
+    }
+
     /**
      * https://stackoverflow.com/questions/468789/is-there-a-way-in-java-to-determine-if-a-path-is-valid-without-attempting-to-cre
      * @param path
      * @return
      */
     public boolean checkIfValidPath(String path) {
+        path = path.trim();
         try {
             Paths.get(path);
         } catch (InvalidPathException | NullPointerException e) {
-            //e.printStackTrace();
+            e.printStackTrace();
             return false;
         }
         return true;

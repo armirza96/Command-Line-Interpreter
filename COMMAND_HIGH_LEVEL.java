@@ -1,7 +1,8 @@
 public enum COMMAND_HIGH_LEVEL {
     APPEND("->>"),
-    WRITE("->");
-
+    OVERWRITE("->"),
+    CONSOLE("console");
+    
     String value;
 
     COMMAND_HIGH_LEVEL(String value) {
