@@ -12,6 +12,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.Dictionary;
+import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.Scanner;
 import java.util.concurrent.Callable;
@@ -31,6 +32,7 @@ import org.omg.SendingContext.RunTime;
 public class Terminal {
     
     private User USER;
+    private Hashtable<String, String> execTable;
 
     public Terminal() {
         System.out.println("Program starting...");
@@ -38,6 +40,7 @@ public class Terminal {
         System.out.println("Reading environment variables...");
         try {
             USER = getEnvirUser();
+            execTable = getExternalCommands();
 
             System.out.println("User Generated...");
         } catch (IOException e) {
@@ -59,64 +62,65 @@ public class Terminal {
         createThread(run, false);
     }
 
+    // I/O Method
     private void controlUserFlow() throws IOException {
         Scanner scanner = new Scanner(System.in);
 
-        String input;
+        String input;														// User Input string
         
-        System.out.print(USER.getUserNameWithHost() + " ");
-        while((input = scanner.nextLine()) != null) {
+        System.out.print(USER.getUserNameWithHost() + " ");					// Output Prompt
+        while((input = scanner.nextLine()) != null) {						// when complete
            // System.out.println("User inputted: " + input);
 
-            if(input.equalsIgnoreCase("exit")) {
-                break;
-            } else if (!input.isEmpty()) {
-                String[] command = input.split(" ");
-                if(command.length <= 5)
-                    decipherCommand(input);
+            if(input.equalsIgnoreCase("exit")) {							// if exit received
+                break;														// leave loop
+            } else if (!input.isEmpty()) {									// if not empty
+                String[] command = input.split(" ");						// Separate input by space delimeter
+                if(command.length <= 5)										// if command is less than 5 cells (maximum operator count)
+                    decipherCommand(input);									// go to parser method
                 else
-                    System.out.println("Uknown command.");
+                    System.out.println("Unknown command.");					// else error message
             }
 
-            System.out.print(USER.getUserNameWithHost() + " ");
+            System.out.print(USER.getUserNameWithHost() + " ");				// return to prompt	
         }
         
         scanner.close();
 
-        System.out.println("Terminal exited.");
+        System.out.println("Terminal exited.");								// exit terminaL
     }
 
     private void decipherCommand(String input) { 
 
-        COMMAND_LOW_LEVEL lowLevel = checkLowLevelPredicate(input);
-        COMMAND_HIGH_LEVEL highLevel = checkHighLevelPredicate(input);
-        Boolean runInBg = input.contains("&");
+        COMMAND_LOW_LEVEL lowLevel = checkLowLevelPredicate(input);			// Check if low-level
+        COMMAND_HIGH_LEVEL highLevel = checkHighLevelPredicate(input);		// check if high level
+        Boolean runInBg = input.contains("&");								// background check
 
-        // if string is echo "Hello world!" ->> file.txt &
-        input = input.replace(lowLevel.value, ""); // removes echo or datetime
-        input = input.replace(highLevel.value, ""); // removes ->> or ->
-        input = input.replace("&", ""); // removes &
-        // left with "Hello world!" file.txt
+        																	// if string is echo "Hello world!" ->> file.txt &
+        input = input.replace(lowLevel.value, ""); 							// removes echo or datetime
+        input = input.replace(highLevel.value, ""); 						// removes ->> or ->
+        input = input.replace("&", "");										// removes & left with "Hello world!" file.txt
 
-        String cleanedInput = input;
-        String[] command = cleanedInput.split(" ");
+        String cleanedInput = input;										// copy input							
+        String[] command = cleanedInput.split(" ");							// split into command and input
 
         //String output = getOutPutString(lowLevel, cleanedInput);
-        Function<String, String> func;
+        Function<String, String> func;										// define lambda expression
 
+        																	// if high level command
         if(highLevel == COMMAND_HIGH_LEVEL.APPEND || highLevel == COMMAND_HIGH_LEVEL.OVERWRITE) {
-            String fileName = command[command.length-1];
+              String fileName = command[command.length-1];					// extract file name
             func = (content) -> {
                 return writeToFile(fileName, content, highLevel == COMMAND_HIGH_LEVEL.APPEND); 
-            };
+            };                                                              // execute 
         } else {
             func = (content) -> {
                 return content;
             };
         }
 
-        Runnable run = () -> {
-            String dataToWrite =  getOutPutString(lowLevel, cleanedInput);   
+        Runnable run = () -> {                                              // if low-level command
+            String dataToWrite =  getOutPutString(lowLevel, cleanedInput);  // get the correct output string   
 
             String consoleOutput = (String) func.apply(dataToWrite);
 
@@ -137,9 +141,9 @@ public class Terminal {
             while (m.find()) {
                 text += m.group(1);
             }
-        } else if(cmd == COMMAND_LOW_LEVEL.DATETIME) {
+        } else if(cmd == COMMAND_LOW_LEVEL.DATETIME) {						// If datetime command
             text = new Date().toString();
-        } else if(cmd == COMMAND_LOW_LEVEL.EXECUTABLE){
+        } else if(cmd == COMMAND_LOW_LEVEL.EXECUTABLE){						// if executable
             //System.out.println("PATH: " + cleanedInput);
 
             /***
@@ -149,27 +153,33 @@ public class Terminal {
              * we then supply the path to the if statement and the runExec method
              * getExternal commands will have implementation line 268
             */
-
-            if(checkIfValidPath(cleanedInput)) {
-                try {
-                    text = runExec(cleanedInput);
-                } catch (IOException e) {
-                    text = convertStrackTraceToString(e);
+        	
+        	if (!execTable.containsKey(cleanedInput.toLowerCase())) {
+        		text = "Bad command or file name";
+        	}
+        	else {
+                if(checkIfValidPath(cleanedInput)) {
+                    try {
+                        text = runExec(cleanedInput);
+                    } catch (IOException e) {
+                        text = convertStrackTraceToString(e);
+                    }
+                } 
+                else {
+                    text = "Supplied path was not valid.";
                 }
-            } else {
-                text = "Supplied path was not valid.";
-            }
+        	}
         } 
 
         return text;
     }
 
     private void createThread(Runnable run, Boolean runInBg) {
-        Task task = new Task(run, runInBg);
+        Task task = new Task(run, runInBg);									// Generate new task
 
-        if(!runInBg) {
+        if(!runInBg) {														// if not run in background
             try {
-                task.thread.join();
+                task.thread.join();											// run and join
             } catch (InterruptedException e) {
                 
                 e.printStackTrace();
@@ -265,15 +275,31 @@ public class Terminal {
         return new User(userName, hostName, paths);
     }
 
-    private Dictionary<String, String> getExternalCommands() {
+    private Hashtable<String, String> getExternalCommands() {
         /**
          * What im thinking is that for the paths in the User variable
          * check each path for executables or .bat files
          * and then when executing online 45 we check if the hashtable has any commands that are like the what the user 
          * typed and we execute it if not we know its some external thing
-         * Im thinking dictionary should be Eexectubale => path 
+         * Im thinking dictionary should be Executable => path 
          */
-        return new Hashtable<>();
+    	
+    	Hashtable<String, String> keyTable= new Hashtable<String, String>();	
+    	
+    	String[] path = USER.getPaths();
+    	
+    	for (int counter = 0; counter < path.length; counter++) {
+    		
+    		File DirectoryPath = new File(path[counter]);
+    		String[] Files = DirectoryPath.list();
+    		
+    		for (int cursor = 0; cursor < Files.length; cursor++) {
+    			if(Files[cursor].toLowerCase().contains(".exe") || Files[cursor].toLowerCase().contains(".bat")) {
+    				keyTable.put(Files[cursor].toLowerCase(), path[counter].toLowerCase());
+    			}
+    		}
+    	}
+        return keyTable;
     }
 
     /**
