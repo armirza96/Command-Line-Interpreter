@@ -155,7 +155,7 @@ public class Terminal {
             */
         	
         	if (!execTable.containsKey(cleanedInput.toLowerCase())) {
-        		text = "Bad command or file name";
+        		text = "Bad command,file name, or path";
         	}
         	else {
                 if(checkIfValidPath(cleanedInput)) {
