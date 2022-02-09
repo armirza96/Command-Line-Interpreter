@@ -27,12 +27,12 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import org.omg.SendingContext.RunTime;
+//\import org.omg.SendingContext.RunTime;
 
 public class Terminal {
     
     private User USER;
-    private Hashtable<String, String> execTable;
+    private Hashtable<String, String> EXTERNAL_COMMANDS = null;
 
     public Terminal() {
         System.out.println("Program starting...");
@@ -40,7 +40,7 @@ public class Terminal {
         System.out.println("Reading environment variables...");
         try {
             USER = getEnvirUser();
-            execTable = getExternalCommands();
+            EXTERNAL_COMMANDS = getExternalCommands();
 
             System.out.println("User Generated...");
         } catch (IOException e) {
@@ -75,8 +75,8 @@ public class Terminal {
             if(input.equalsIgnoreCase("exit")) {							// if exit received
                 break;														// leave loop
             } else if (!input.isEmpty()) {									// if not empty
-                String[] command = input.split(" ");						// Separate input by space delimeter
-                if(command.length <= 5)										// if command is less than 5 cells (maximum operator count)
+                ArrayList<String> command = splitCommandBySpace(input);//String[] command = input.split(" ");						// Separate input by space delimeter
+                if(command.size() <= 5)										// if command is less than 5 cells (maximum operator count)
                     decipherCommand(input);									// go to parser method
                 else
                     System.out.println("Unknown command.");					// else error message
@@ -101,15 +101,15 @@ public class Terminal {
         input = input.replace(highLevel.value, ""); 						// removes ->> or ->
         input = input.replace("&", "");										// removes & left with "Hello world!" file.txt
 
-        String cleanedInput = input.toLowerCase();										// copy input							
-        String[] command = cleanedInput.split(" ");							// split into command and input
+        String cleanedInput = input.toLowerCase().trim();					// clean the user input and remve trailing and leading spaces							
 
         //String output = getOutPutString(lowLevel, cleanedInput);
         Function<String, String> func;										// define lambda expression
 
         																	// if high level command
         if(highLevel == COMMAND_HIGH_LEVEL.APPEND || highLevel == COMMAND_HIGH_LEVEL.OVERWRITE) {
-              String fileName = command[command.length-1];					// extract file name
+            String[] command = cleanedInput.split(" ");							// split into command and input
+            String fileName = command[command.length-1];					// extract file name
             func = (content) -> {
                 return writeToFile(fileName, content, highLevel == COMMAND_HIGH_LEVEL.APPEND); 
             };                                                              // execute 
@@ -132,12 +132,12 @@ public class Terminal {
 
     }
 
-    private String getOutPutString(COMMAND_LOW_LEVEL cmd, String cleanedInput) {
+    private String getOutPutString(COMMAND_LOW_LEVEL cmd, String input) {
         String text = "";
 
         if(cmd == COMMAND_LOW_LEVEL.ECHO) {
             Pattern p = Pattern.compile("\"([^\"]*)\"");
-            Matcher m = p.matcher(cleanedInput);
+            Matcher m = p.matcher(input);
             while (m.find()) {
                 text += m.group(1);
             }
@@ -153,23 +153,20 @@ public class Terminal {
              * we then supply the path to the if statement and the runExec method
              * getExternal commands will have implementation line 268
             */
-        	
-        	if (!execTable.containsKey(cleanedInput.toLowerCase())) {
-        		text = "Bad command,file name, or path";
-        	}
-        	else {
-                
-                String path = execTable.get(cleanedInput);
+
+            if (EXTERNAL_COMMANDS.containsKey(input)) {               
+                String path = EXTERNAL_COMMANDS.get(input);
                 if(checkIfValidPath(path)) {
                     try {
                         text = runExec(path);
                     } catch (IOException e) {
                         text = convertStrackTraceToString(e);
                     }
-                } 
-                else {
+                } else {
                     text = "Supplied path was not valid.";
                 }
+        	} else {
+                text = "Invalid command, path or input.";
         	}
         } 
 
@@ -311,11 +308,25 @@ public class Terminal {
     }
 
     /**
+     * https://stackoverflow.com/questions/7804335/split-string-on-spaces-in-java-except-if-between-quotes-i-e-treat-hello-wor
+     * @param input
+     * @return
+     */
+    private ArrayList<String> splitCommandBySpace(String input) {
+        ArrayList<String> list = new ArrayList<String>();
+        Matcher m = Pattern.compile("([^\"]\\S*|\".+?\")\\s*").matcher(input);
+        while (m.find())
+            list.add(m.group(1));
+
+        return list;
+    }
+
+    /**
      * https://stackoverflow.com/questions/468789/is-there-a-way-in-java-to-determine-if-a-path-is-valid-without-attempting-to-cre
      * @param path
      * @return
      */
-    public boolean checkIfValidPath(String path) {
+    private boolean checkIfValidPath(String path) {
         path = path.trim();
         try {
             Paths.get(path);
