@@ -1,7 +1,7 @@
 public enum COMMAND_LOW_LEVEL {
 
     ECHO("echo"), 
-    DATETIME("datetime"),
+    //DATETIME("datetime"),
     EXECUTABLE("executable");
     String value;
 

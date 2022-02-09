@@ -101,7 +101,7 @@ public class Terminal {
         input = input.replace(highLevel.value, ""); 						// removes ->> or ->
         input = input.replace("&", "");										// removes & left with "Hello world!" file.txt
 
-        String cleanedInput = input;										// copy input							
+        String cleanedInput = input.toLowerCase();										// copy input							
         String[] command = cleanedInput.split(" ");							// split into command and input
 
         //String output = getOutPutString(lowLevel, cleanedInput);
@@ -141,9 +141,9 @@ public class Terminal {
             while (m.find()) {
                 text += m.group(1);
             }
-        } else if(cmd == COMMAND_LOW_LEVEL.DATETIME) {						// If datetime command
+        } /*else if(cmd == COMMAND_LOW_LEVEL.DATETIME) {						// If datetime command
             text = new Date().toString();
-        } else if(cmd == COMMAND_LOW_LEVEL.EXECUTABLE){						// if executable
+        }*/ else if(cmd == COMMAND_LOW_LEVEL.EXECUTABLE){						// if executable
             //System.out.println("PATH: " + cleanedInput);
 
             /***
@@ -158,9 +158,11 @@ public class Terminal {
         		text = "Bad command,file name, or path";
         	}
         	else {
-                if(checkIfValidPath(cleanedInput)) {
+                
+                String path = execTable.get(cleanedInput);
+                if(checkIfValidPath(path)) {
                     try {
-                        text = runExec(cleanedInput);
+                        text = runExec(path);
                     } catch (IOException e) {
                         text = convertStrackTraceToString(e);
                     }
@@ -191,12 +193,12 @@ public class Terminal {
         LowLevelPredicate<String> predicate = new LowLevelPredicate<>();
 
         if(predicate.test(input)) {
-            if(predicate.testForEcho(input)) {
-                return COMMAND_LOW_LEVEL.ECHO;
-            } else {
-                return COMMAND_LOW_LEVEL.DATETIME;
-            }
-        
+            // if(predicate.testForEcho(input)) {
+            //     return COMMAND_LOW_LEVEL.ECHO;
+            // } else {
+            //     return COMMAND_LOW_LEVEL.DATETIME;
+            // }
+            return COMMAND_LOW_LEVEL.ECHO;
         } else {
             return COMMAND_LOW_LEVEL.EXECUTABLE;
         }
@@ -268,6 +270,8 @@ public class Terminal {
 
         System.out.println(String.format("Environment Variables: %s, %s, %s", userName, hostName, path));
 
+        path = path.replace("PATH=", "");
+
         String[] paths = path.split(",");
 
         reader.close();
@@ -289,15 +293,19 @@ public class Terminal {
     	String[] path = USER.getPaths();
     	
     	for (int counter = 0; counter < path.length; counter++) {
-    		
     		File DirectoryPath = new File(path[counter]);
     		String[] Files = DirectoryPath.list();
     		
-    		for (int cursor = 0; cursor < Files.length; cursor++) {
-    			if(Files[cursor].toLowerCase().contains(".exe") || Files[cursor].toLowerCase().contains(".bat")) {
-    				keyTable.put(Files[cursor].toLowerCase(), path[counter].toLowerCase());
-    			}
-    		}
+            if(Files != null) {
+                for (int cursor = 0; cursor < Files.length; cursor++) {
+                    if(Files[cursor].toLowerCase().contains(".exe") || Files[cursor].toLowerCase().contains(".bat")) {
+                        String fileName = Files[cursor].toLowerCase().replace(".bat", "");
+                        fileName = fileName.replace(".exe", "");
+
+                        keyTable.put(fileName, path[counter].toLowerCase() + Files[cursor].toLowerCase());
+                    }
+                }
+            }
     	}
         return keyTable;
     }

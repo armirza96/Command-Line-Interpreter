@@ -1,3 +1,4 @@
 Abdul
 root
+PATH=../,../usr/,../usr/local/,../usr/local/bin/,../usr/proj/,../usr/proj/bin/
 PATH=usr/bin,bin,usr/local/bin,usr/someprog/bin
