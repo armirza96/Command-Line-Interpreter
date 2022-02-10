@@ -119,16 +119,26 @@ public class Terminal {
             };
         }
 
-        Runnable run = () -> {                                              // if low-level command
+    
+        if(lowLevel == COMMAND_LOW_LEVEL.ECHO) {
             String dataToWrite =  getOutPutString(lowLevel, cleanedInput);  // get the correct output string   
 
             String consoleOutput = (String) func.apply(dataToWrite);
 
-            if(!runInBg)
-                System.out.println(consoleOutput);
-        };
+            System.out.println(consoleOutput);
+        } else if(lowLevel == COMMAND_LOW_LEVEL.EXECUTABLE) {
+            
+            Runnable run = () -> {                                              // if low-level command
+                String dataToWrite =  getOutPutString(lowLevel, cleanedInput);  // get the correct output string   
 
-       createThread(run, runInBg);
+                String consoleOutput = (String) func.apply(dataToWrite);
+
+                if(!runInBg)
+                    System.out.println(consoleOutput);
+            };
+            createThread(run, runInBg);
+        }
+        
 
     }
 
@@ -154,8 +164,10 @@ public class Terminal {
              * getExternal commands will have implementation line 268
             */
 
-            if (EXTERNAL_COMMANDS.containsKey(input)) {               
-                String path = EXTERNAL_COMMANDS.get(input);
+            String executable = input.split(" ")[0];
+
+            if (EXTERNAL_COMMANDS.containsKey(executable)) {               
+                String path = EXTERNAL_COMMANDS.get(executable);
                 if(checkIfValidPath(path)) {
                     try {
                         text = runExec(path);

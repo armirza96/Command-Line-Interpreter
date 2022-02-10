@@ -1,14 +1,12 @@
-import java.util.function.Function;
-import java.util.function.Supplier;
 
 public  class Task implements Runnable{
     Thread thread;
-    Runnable func;
+    Runnable run;
     Boolean isBackgroundThread;
 
-    public Task(Runnable func, Boolean isBackgroundThread) {
+    public Task(Runnable run, Boolean isBackgroundThread) {
 
-        this. func = func;
+        this. run = run;
 
         this.isBackgroundThread = isBackgroundThread;
 
@@ -18,7 +16,7 @@ public  class Task implements Runnable{
 
     @Override
     public void run() {
-        func.run();
+        run.run();
     }
     
 
