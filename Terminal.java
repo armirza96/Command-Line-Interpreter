@@ -75,11 +75,11 @@ public class Terminal {
             if(input.equalsIgnoreCase("exit")) {							// if exit received
                 break;														// leave loop
             } else if (!input.isEmpty()) {									// if not empty
-                ArrayList<String> command = splitCommandBySpace(input);//String[] command = input.split(" ");						// Separate input by space delimeter
-                if(command.size() <= 5)										// if command is less than 5 cells (maximum operator count)
+                // ArrayList<String> command = splitCommandBySpace(input);//String[] command = input.split(" ");						// Separate input by space delimeter
+                // if(command.size() <= 5)										// if command is less than 5 cells (maximum operator count)
                     decipherCommand(input);									// go to parser method
-                else
-                    System.out.println("Unknown command.");					// else error message
+                // else
+                //     System.out.println("Unknown command.");					// else error message
             }
 
             System.out.print(USER.getUserNameWithHost() + " ");				// return to prompt	
@@ -95,11 +95,20 @@ public class Terminal {
         COMMAND_LOW_LEVEL lowLevel = checkLowLevelPredicate(input);			// Check if low-level
         COMMAND_HIGH_LEVEL highLevel = checkHighLevelPredicate(input);		// check if high level
         Boolean runInBg = input.contains("&");								// background check
-
+        String fileName;
         																	// if string is echo "Hello world!" ->> file.txt &
         input = input.replace(lowLevel.value, ""); 							// removes echo or datetime
         input = input.replace(highLevel.value, ""); 						// removes ->> or ->
         input = input.replace("&", "");										// removes & left with "Hello world!" file.txt
+        
+        if(input.contains(".txt")) {
+            String[] split = input.split(" ");                                  // splitting so that we can get a file name
+            fileName = split[split.length-1]; 
+            split[split.length-1] = "";
+            input = String.join(" ", split);
+        } else {
+            fileName = null;
+        }
 
         String cleanedInput = input.toLowerCase().trim();					// clean the user input and remve trailing and leading spaces							
 
@@ -108,8 +117,6 @@ public class Terminal {
 
         																	// if high level command
         if(highLevel == COMMAND_HIGH_LEVEL.APPEND || highLevel == COMMAND_HIGH_LEVEL.OVERWRITE) {
-            String[] command = cleanedInput.split(" ");							// split into command and input
-            String fileName = command[command.length-1];					// extract file name
             func = (content) -> {
                 return writeToFile(fileName, content, highLevel == COMMAND_HIGH_LEVEL.APPEND); 
             };                                                              // execute 
@@ -164,20 +171,24 @@ public class Terminal {
              * getExternal commands will have implementation line 268
             */
 
-            String executable = input.split(" ")[0];
+            //String executable = input.split(" ")[0];
 
-            if (EXTERNAL_COMMANDS.containsKey(executable)) {               
-                String path = EXTERNAL_COMMANDS.get(executable);
-                if(checkIfValidPath(path)) {
-                    try {
-                        text = runExec(path);
-                    } catch (IOException e) {
-                        text = convertStrackTraceToString(e);
-                    }
-                } else {
-                    text = "Supplied path was not valid.";
+            if (EXTERNAL_COMMANDS.containsKey(input)) {               
+                String path = EXTERNAL_COMMANDS.get(input);
+                try {
+                    text = runExec(path);
+                } catch (IOException e) {
+                    text = convertStrackTraceToString(e);
                 }
-        	} else {
+        	} else if(checkIfValidPath(input)) {
+                
+                try {
+                    text = runExec(input);
+                } catch (IOException e) {
+                    text = convertStrackTraceToString(e);
+                }
+
+            } else {
                 text = "Invalid command, path or input.";
         	}
         } 
